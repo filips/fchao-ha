@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "fchao-inverter"
+version = "0.1.0"
+description = ""
+authors = ["Filip Sandborg-Olsen <filipsandborg@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+pyserial = "^3.5"
+paho-mqtt = "^2.1.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
