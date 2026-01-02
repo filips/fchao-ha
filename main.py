@@ -53,18 +53,18 @@ def parse_inverter_data(data):
         return None
 
     try:
-        # Parse status byte (byte after temperature)
-        status_byte = int(hex_str[24:26], 16)  # Byte 12 (position 24-26 in hex string)
-        status_byte2 = int(hex_str[26:28], 16)
+        reserved_byte = int(hex_str[24:26], 16)  # Byte 12 (position 24-26 in hex string)
+        alarm_byte = int(hex_str[26:28], 16) # Byte 13 (position 26-28 in hex string)
         
         parsed = {
             'voltage_out': parse_bcd_value(hex_str[8:12]),  # AC Volts
             'power': parse_bcd_value(hex_str[12:16]),  # Watts
             'voltage_in': parse_bcd_value(hex_str[16:20]) / 10.0,  # DC Volts
             'temperature': parse_bcd_value(hex_str[20:24]),  # Celsius
-            'status': 'OFF' if status_byte & 0x06 == 0x06 else 'ON',  # 0x06 = OFF, other = ON
-            'fan': 'ON' if status_byte2 & 0x40 else 'OFF'
+            'status': 'OFF' if reserved_byte & 0x01 else 'ON',  # 0x06 = OFF, other = ON
+            'fan': 'ON' if alarm_byte & 0x40 else 'OFF'
         }
+
         return parsed
     except (ValueError, IndexError):
         return None
@@ -121,10 +121,10 @@ class MQTTPublisher:
             
             if payload == "ON":
                 print(f"→ Turning inverter ON")
-                send_query(self.serial_port, '01010400')
+                send_query(self.serial_port, '0102040000')
             elif payload == "OFF":
                 print(f"→ Turning inverter OFF")
-                send_query(self.serial_port, '010104')
+                send_query(self.serial_port, '0102040100')
     
     def connect(self):
         try:
