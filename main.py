@@ -331,11 +331,6 @@ def main():
                     print(f"\n⚠ No response for {time_since_response:.0f}s - marking unavailable")
                     mqtt_pub.publish_availability(False)
                     was_available = False
-            else:
-                if not was_available:
-                    print(f"✓ Inverter responding again - marking available\n")
-                    mqtt_pub.publish_availability(True)
-                    was_available = True
             
             # Read responses
             if ser.in_waiting > 0:
@@ -369,6 +364,13 @@ def main():
                         if data:
                             # Update last response time
                             last_response_time = time.time()
+
+                            # Restore availability BEFORE publishing state
+                            if not was_available:
+                                print(f"✓ Inverter responding again - marking available\n")
+                                mqtt_pub.publish_availability(True)
+                                was_available = True
+
                             mqtt_pub.publish_state(data)
                     else:
                         # Only show non-data packets if they're not just noise
