@@ -170,8 +170,21 @@ class SerialManager:
                     print(f"Serial read error: {e}")
                     await asyncio.sleep(1)
 
+    def _verify_checksum(self, frame: bytes) -> bool:
+        """Verify frame checksum. Checksum is sum of payload bytes (between AE and checksum)."""
+        if len(frame) < 4:  # AE + at least 1 payload byte + checksum + EE
+            return False
+        payload = frame[1:-2]  # Bytes between AE and checksum
+        expected = sum(payload) & 0xFF
+        actual = frame[-2]
+        return expected == actual
+
     async def _process_frame(self, frame: bytes):
         """Process a complete frame"""
+        if not self._verify_checksum(frame):
+            print(f"  Checksum error: {frame.hex().upper()}")
+            return
+
         if len(frame) == 17:
             parsed = parse_inverter_data(frame)
             if parsed and self._data_callback:
