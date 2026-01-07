@@ -50,23 +50,23 @@ def from_bcd(bcd: int) -> int:
     return ((bcd >> 4) * 10) + (bcd & 0x0F)
 
 
-def parse_inverter_data(data):
-    """Parse the inverter response packet (17 bytes)"""
-    if len(data) != 17:
+def parse_inverter_data(payload):
+    """Parse inverter data payload (14 bytes, without frame markers or checksum)"""
+    if len(payload) != 14:
         return None
 
-    if data[0] != 0xAE or data[1] != 0x01 or data[-1] != 0xEE:
+    if payload[0] != 0x01:  # Device ID
         return None
 
     try:
-        reserved_byte = data[12]
-        alarm_byte = data[13]
+        reserved_byte = payload[11]
+        alarm_byte = payload[12]
 
         return {
-            'voltage_out': from_bcd(data[4]) * 100 + from_bcd(data[5]),
-            'power': from_bcd(data[6]) * 100 + from_bcd(data[7]),
-            'voltage_in': (from_bcd(data[8]) * 100 + from_bcd(data[9])) / 10.0,
-            'temperature': from_bcd(data[10]) * 100 + from_bcd(data[11]),
+            'voltage_out': from_bcd(payload[3]) * 100 + from_bcd(payload[4]),
+            'power': from_bcd(payload[5]) * 100 + from_bcd(payload[6]),
+            'voltage_in': (from_bcd(payload[7]) * 100 + from_bcd(payload[8])) / 10.0,
+            'temperature': from_bcd(payload[9]) * 100 + from_bcd(payload[10]),
             'status': 'OFF' if reserved_byte & 0x01 else 'ON',
             'fan': 'ON' if alarm_byte & 0x40 else 'OFF'
         }
@@ -184,12 +184,15 @@ class SerialManager:
             print(f"  Checksum error: {frame.hex().upper()}")
             return
 
-        if len(frame) == 17:
-            parsed = parse_inverter_data(frame)
+        # Strip framing: AE at start, checksum and EE at end
+        payload = frame[1:-2]
+
+        if len(payload) == 14:
+            parsed = parse_inverter_data(payload)
             if parsed and self._data_callback:
                 await self._data_callback(parsed)
-        elif len(frame) > 3:
-            print(f"  Non-data packet ({len(frame)} bytes): {frame.hex().upper()}")
+        elif len(payload) > 1:
+            print(f"  Non-data packet ({len(payload)} bytes): {payload.hex().upper()}")
 
 
 class MQTTManager:
