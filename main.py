@@ -39,12 +39,15 @@ COMMAND_ON = '0102040000'
 COMMAND_OFF = '0102040100'
 
 
-def parse_bcd_value(hex_str):
-    """Convert BCD hex string to decimal integer"""
-    try:
-        return int(hex_str)
-    except ValueError:
-        return None
+def to_bcd(value: int) -> int:
+    """Convert decimal value to BCD (37 → 0x37). Handles values 0-99."""
+    value = value % 100  # Ensure fits in one BCD byte
+    return ((value // 10) << 4) | (value % 10)
+
+
+def from_bcd(bcd: int) -> int:
+    """Convert BCD to decimal value (0x37 → 37)."""
+    return ((bcd >> 4) * 10) + (bcd & 0x0F)
 
 
 def parse_inverter_data(data):
@@ -52,25 +55,21 @@ def parse_inverter_data(data):
     if len(data) != 17:
         return None
 
-    hex_str = data.hex().upper()
-
-    if not hex_str.startswith('AE01') or not hex_str.endswith('EE'):
+    if data[0] != 0xAE or data[1] != 0x01 or data[-1] != 0xEE:
         return None
 
     try:
-        reserved_byte = int(hex_str[24:26], 16)
-        alarm_byte = int(hex_str[26:28], 16)
+        reserved_byte = data[12]
+        alarm_byte = data[13]
 
-        parsed = {
-            'voltage_out': parse_bcd_value(hex_str[8:12]),
-            'power': parse_bcd_value(hex_str[12:16]),
-            'voltage_in': parse_bcd_value(hex_str[16:20]) / 10.0,
-            'temperature': parse_bcd_value(hex_str[20:24]),
+        return {
+            'voltage_out': from_bcd(data[4]) * 100 + from_bcd(data[5]),
+            'power': from_bcd(data[6]) * 100 + from_bcd(data[7]),
+            'voltage_in': (from_bcd(data[8]) * 100 + from_bcd(data[9])) / 10.0,
+            'temperature': from_bcd(data[10]) * 100 + from_bcd(data[11]),
             'status': 'OFF' if reserved_byte & 0x01 else 'ON',
             'fan': 'ON' if alarm_byte & 0x40 else 'OFF'
         }
-
-        return parsed
     except (ValueError, IndexError):
         return None
 
@@ -79,8 +78,8 @@ def build_packet(command_bytes: str) -> bytes:
     """Build command packet with checksum"""
     packet = bytearray.fromhex('AE')
     packet.extend(bytearray.fromhex(command_bytes))
-    checksum_value = sum(packet[1:])
-    packet.append(checksum_value & 0xFF)
+    checksum_value = sum(packet[1:]) & 0xFF
+    packet.append(to_bcd(checksum_value))
     packet.append(0xEE)
     return bytes(packet)
 
@@ -171,12 +170,12 @@ class SerialManager:
                     await asyncio.sleep(1)
 
     def _verify_checksum(self, frame: bytes) -> bool:
-        """Verify frame checksum. Checksum is sum of payload bytes (between AE and checksum)."""
+        """Verify frame checksum. Checksum is sum of payload bytes mod 100, stored as BCD."""
         if len(frame) < 4:  # AE + at least 1 payload byte + checksum + EE
             return False
         payload = frame[1:-2]  # Bytes between AE and checksum
-        expected = sum(payload) & 0xFF
-        actual = frame[-2]
+        expected = (sum(payload) & 0xFF) % 100
+        actual = from_bcd(frame[-2])
         return expected == actual
 
     async def _process_frame(self, frame: bytes):
