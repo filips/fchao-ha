@@ -19,6 +19,7 @@ import aiomqtt
 SERIAL_PORT = '/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0'
 SERIAL_BAUDRATE = 9600
 QUERY_INTERVAL = 1.0
+READ_TIMEOUT = 2.0
 TIMEOUT_THRESHOLD = 10.0
 
 MQTT_BROKER = 'localhost'
@@ -108,7 +109,7 @@ class SerialManager:
             bytesize=aioserial.EIGHTBITS,
             parity=aioserial.PARITY_NONE,
             stopbits=aioserial.STOPBITS_ONE,
-            timeout=0.1,
+            timeout=READ_TIMEOUT,
         )
         self._running = True
         print("✓ Serial port opened")
@@ -131,7 +132,7 @@ class SerialManager:
         while self._running:
             byte = await asyncio.wait_for(
                 self.serial.read_async(1),
-                timeout=0.5
+                timeout=READ_TIMEOUT
             )
             if byte and byte[0] == self.START_MARKER:
                 break
@@ -143,7 +144,7 @@ class SerialManager:
         while self._running and len(frame) < self.MAX_FRAME_SIZE:
             byte = await asyncio.wait_for(
                 self.serial.read_async(1),
-                timeout=0.5
+                timeout=READ_TIMEOUT
             )
             if not byte:
                 continue
